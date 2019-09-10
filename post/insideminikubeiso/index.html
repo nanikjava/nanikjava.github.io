@@ -1,2 +1,165 @@
-<!doctype html><html lang=en><head><title>Inside minikube ISO (Work in progress)</title><meta name=viewport content="width=device-width,initial-scale=1"><meta charset=utf-8><link href=../../css/milk.min.css rel=stylesheet><link href=../../css/milk-responsive.min.css rel=stylesheet><link href=../../css/style.css rel=stylesheet type=text/css media=all><link href=../../css/fonts.css rel=stylesheet type=text/css media=all><link rel="shortcut icon" href=../../images/alexfinn.ico><link rel=apple-touch-icon href><link rel=canonical href=../../post/insideminikubeiso/><link href=../../rss.xml type=application/atom+xml rel=alternate></head><body><div class="navbar navbar-fixed-top"><div id=navbar-inner><div id=logo><a href=../../><img src=../../images/minikube.png width=100px></img></a></div></div></div><div class=container><div class=content><div class=row-fluid><div class=span12><div class=posts><div class=post><header class=post-header><h1><a href=../../post/insideminikubeiso/>Inside minikube ISO (Work in progress)</a></h1><div class=post-time>September 1 2019</div></header><div class=post-after><div class=tags></div></div><hr><div class="post content"><hr><h2 id=inside-minikube-iso>Inside minikube .iso</h2><p>The following command will build the minikube.iso</p><ul><li>make out/minikube.iso 2&gt;&amp;1 | tee buildminikubeiso.txt</li><li>how to build the .iso</li><li>building .iso means creating rootfs + kernel using buildroot</li><li>show the content of the .iso files</li><li>extract and chroot the .iso files to show the content</li></ul></div><div class=about><p></p></div><nav id=pagination><a class=prev href=../../post/deployingtominikube/>Prev</a>
-<a class=next href=../../post/minikubeparameters/>Next</a></nav><footer>Built with <a href=https://github.com/spf13/hugo>Hugo</a><p>Template By : © Alexander Feller 2018</p></footer></div></div></div></div></div></body><script type=text/javascript>var _paq=_paq||[];_paq.push(['trackPageView']);_paq.push(['enableLinkTracking']);(function(){var u=(("https:"==document.location.protocol)?"https":"http")+":change-me";_paq.push(['setTrackerUrl',u+'piwik.php']);_paq.push(['setSiteId',4]);var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];g.type='text/javascript';g.defer=true;g.async=true;g.src=u+'piwik.js';s.parentNode.insertBefore(g,s);})();</script><noscript><p><img src=http://change-me style=border:0 alt></p></noscript></html>
+<!doctype html><html lang=en><head><title>Inside minikube ISO</title><meta name=viewport content="width=device-width,initial-scale=1"><meta charset=utf-8><link href=../../css/milk.min.css rel=stylesheet><link href=../../css/milk-responsive.min.css rel=stylesheet><link href=../../css/style.css rel=stylesheet type=text/css media=all><link href=../../css/fonts.css rel=stylesheet type=text/css media=all><link rel="shortcut icon" href=../../images/alexfinn.ico><link rel=apple-touch-icon href><link rel=canonical href=../../post/insideminikubeiso/><link href=../../rss.xml type=application/atom+xml rel=alternate></head><body><div class="navbar navbar-fixed-top"><div id=navbar-inner><div id=logo><a href=../../><img src=../../images/minikube.png width=100px></img></a></div></div></div><div class=container><div class=content><div class=row-fluid><div class=span12><div class=posts><div class=post><header class=post-header><h1><a href=../../post/insideminikubeiso/>Inside minikube ISO</a></h1><div class=post-time>September 10 2019</div></header><div class=post-after><div class=tags></div></div><hr><div class="post content"><p>Minikube uses a generated .iso file that is used to bootstrap the VM with it&rsquo;s own <a href=https://en.wikipedia.org/wiki/Linux_kernel>kernel</a> and <a href=https://en.wikipedia.org/wiki/Initial_ramdisk>rootfs</a>. Once the VM has been initialized properly it will use the .iso to bootstrap the Linux kernel allowing all the different applications to be installed and run. This means that pretty much minikube is running on it&rsquo;s own operating system and does not use any dependencies from the host system (except through the VM)</p><h1>Building .iso file</h1><p>Building the .iso file for minikube requires docker to be running on your local machine. Internally it uses docker container to build everything (kernel + rootfs) and package it into an .iso file. There are 2 separate make tasks that need to be triggered as shown below:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>buildroot-image: $(ISO_BUILD_IMAGE) # convenient alias to build the docker container
+$(ISO_BUILD_IMAGE): deploy/iso/minikube-iso/Dockerfile
+	docker build $(ISO_DOCKER_EXTRA_ARGS) -t $@ -f $<span style=color:#960050;background-color:#1e0010>&lt;</span> $(dir $<span style=color:#960050;background-color:#1e0010>&lt;</span>)
+	@echo &#34;&#34;
+	@echo &#34;$(@) successfully built&#34;</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>out/minikube.iso: $(shell find &#34;deploy/iso/minikube-iso&#34; -type f)
+ifeq ($(IN_DOCKER),1)
+	$(MAKE) minikube_iso
+else
+	docker run --rm --workdir /mnt --volume $(CURDIR):/mnt $(ISO_DOCKER_EXTRA_ARGS) \
+		--user $(shell id -u):$(shell id -g) --env HOME=/tmp --env IN_DOCKER=1 \
+		$(ISO_BUILD_IMAGE) /usr/bin/make out/minikube.iso
+endif</code></pre></div><p>This means there are 2 separate tasks that need to be executed</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=color:#a6e22e>make</span> <span style=color:#a6e22e>buildroot</span><span style=color:#f92672>-</span><span style=color:#a6e22e>image</span> <span style=color:#ae81ff>2</span>&gt;<span style=color:#f92672>&amp;</span><span style=color:#ae81ff>1</span> | <span style=color:#a6e22e>tee</span> <span style=color:#a6e22e>buildrootimage</span>.<span style=color:#a6e22e>txt</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>make</span> <span style=color:#a6e22e>out</span><span style=color:#f92672>/</span><span style=color:#a6e22e>minikube</span>.<span style=color:#a6e22e>iso</span>   <span style=color:#ae81ff>2</span>&gt;<span style=color:#f92672>&amp;</span><span style=color:#ae81ff>1</span> | <span style=color:#a6e22e>tee</span> <span style=color:#a6e22e>buildminikubeiso</span>.<span style=color:#a6e22e>txt</span></code></pre></div><p>The output of the build process will be piped into <em>buildrootimage.txt</em> and <em>buildminikubeiso.txt</em> file to make it easy for troubleshooting purposes. Here is a snapshpot of how the output looks like from both the logs</p><p><strong>buildrootimage.txt</strong></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>docker build  -t gcr.io/k8s-minikube/buildroot-image -f deploy/iso/minikube-iso/Dockerfile deploy/iso/minikube-iso/
+Sending build context to Docker daemon  184.3kB
+
+Step 1/6 : FROM ubuntu:18.04
+18.04: Pulling from library/ubuntu
+35c102085707: Pulling fs layer
+251f5509d51d: Pulling fs layer
+.....
+.....
+8e829fe70a46: Pull complete
+6001e1789921: Verifying Checksum
+6001e1789921: Download complete
+6001e1789921: Pull complete
+Digest: sha256:d1d454df0f579c6be4d8161d227462d69e163a8ff9d20a847533989cf0c94d90
+Status: Downloaded newer image for ubuntu:18.04
+ ---&gt; a2a15febcdf3
+Step 2/6 : RUN apt-get update 	<span style=color:#960050;background-color:#1e0010>&amp;&amp;</span> apt-get install -y apt dpkg apt-utils ca-certificates 	<span style=color:#960050;background-color:#1e0010>&amp;&amp;</span> apt-get upgrade -y 	<span style=color:#960050;background-color:#1e0010>&amp;&amp;</span> apt-get install -y 		build-essential 		git 		wget 		cpio 		python 		unzip 		bc 		gcc-multilib 		automake 		libtool 		gnupg2 		p7zip-full 		locales 		rsync 		dumb-init 		golang-go 		libpcre3-dev 	<span style=color:#960050;background-color:#1e0010>&amp;&amp;</span> rm -rf /var/lib/apt/lists/*
+ ---&gt; Running in 3e3ff8ddac3e
+Get:1 http://security.ubuntu.com/ubuntu bionic-security InRelease [88.7 kB]
+Get:2 http://archive.ubuntu.com/ubuntu bionic InRelease [242 kB]
+Get:3 http://security.ubuntu.com/ubuntu bionic-security/universe amd64 Packages [766 kB]
+Get:4 http://archive.ubuntu.com/ubuntu bionic-updates InRelease [88.7 kB]
+Get:5 http://archive.ubuntu.com/ubuntu bionic-backports InRelease [74.6 kB]
+Get:6 http://archive.ubuntu.com/ubuntu bionic/multiverse amd64 Packages [186 kB]
+.....
+.....
+Unpacking manpages-dev (4.15-1) ...
+Selecting previously unselected package p7zip.
+Preparing to unpack .../153-p7zip_16.02+dfsg-6_amd64.deb ...
+Unpacking p7zip (16.02+dfsg-6) ...
+.....
+.....
+Removing intermediate container 3e3ff8ddac3e
+ ---&gt; 89cfa69b7f86
+Step 3/6 : RUN localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
+ ---&gt; Running in e68c807a6dbf
+Removing intermediate container e68c807a6dbf
+ ---&gt; c69896a88da3
+Step 4/6 : ENV LANG en_US.utf8
+ ---&gt; Running in 58df4bca1563
+Removing intermediate container 58df4bca1563
+ ---&gt; c181b08523ad
+Step 5/6 : ENTRYPOINT [&#34;/usr/bin/dumb-init&#34;, &#34;--&#34;]
+ ---&gt; Running in 46918f491955
+Removing intermediate container 46918f491955
+ ---&gt; 3e76d78225fc
+Step 6/6 : CMD [&#34;/bin/bash&#34;]
+ ---&gt; Running in 6cefbf569aad
+Removing intermediate container 6cefbf569aad
+ ---&gt; 2217637c1629
+Successfully built 2217637c1629
+Successfully tagged gcr.io/k8s-minikube/buildroot-image:latest
+
+gcr.io/k8s-minikube/buildroot-image successfully built</code></pre></div><p><strong>buildminikubeiso.txt</strong></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>docker run --rm --workdir /mnt --volume /home/nanik/Downloads/temp/packages/src/k8s.io/minikube:/mnt  \
+	--user 1000:1000 --env HOME=/tmp --env IN_DOCKER=1 \
+	gcr.io/k8s-minikube/buildroot-image /usr/bin/make out/minikube.iso
+/usr/bin/make minikube_iso
+make[1]: Entering directory &#39;/mnt&#39;
+echo v1.4.0-beta.0 &gt; deploy/iso/minikube-iso/board/coreos/minikube/rootfs-overlay/etc/VERSION
+if [ ! -d ./out/buildroot ]; then \
+	mkdir -p ./out; \
+	git clone --depth=1 --branch=2018.05.3 https://github.com/buildroot/buildroot ./out/buildroot; \
+fi;
+Cloning into &#39;./out/buildroot&#39;...
+Note: checking out &#39;717309783755a883974896ea822675a7bf46da3a&#39;.
+....
+/usr/bin/make BR2_EXTERNAL=../../deploy/iso/minikube-iso minikube_defconfig -C ./out/buildroot
+....
+....
+....
+....</code></pre></div><h1>Using Virtualbox</h1><p>Just for fun let&rsquo;s try to run the .iso file by ourself using the VirtualBox.</p><p>Start the VirtualBox UI from your local machine</p><p><img src=../../media/buildingiso/building_iso_minikube_virtualbox_startup.png alt=BuildingISOVirtualboxStartup></p><p>Create and configure virtual machine using the same setting as shown in the screenshot</p><p><img src=../../media/buildingiso/building_iso_minikube_machine_setting.png alt=BuildingISOVMSetting></p><p>Make sure you specify the newly generated .iso file from your local build like the below screenshot</p><p><img src=../../media/buildingiso/building_iso_minikube_setup_iso_file.png alt=BuildingISOSetupISOFile></p><p>Once configured properly starts up the VM and you will see output similar to the following screenshot</p><p><img src=../../media/buildingiso/building_iso_minikube_kernel_bootup.png alt=BuildingISOKernelStartup></p><p>When the kernel startup properly the screen will show the prompt as shown the following screenshot. Enter <strong>root</strong> as the username and you will be inside the bash environment</p><p><img src=../../media/buildingiso/building_iso_minikube_login.png alt=BuildingISOLoginScreen></p><p>Even though you are able to run the .iso file the VM is still in it&rsquo;s raw form as there are no Kubernetes app or configuration installed. So pretty much this is just an empty OS wihtout Kubernetes.</p><p>By going through through this exercise you now have a better idea the gaps that minikube try to fill in. Minikube fills in the gap by automating the whole process until the whole thing is up and running.</p><h1>Dissecting minikube .iso file</h1><p>Now that we have successfully generate and use the freshly build iso file, it&rsquo;s time to dissect and take a look inside it. The iso file is a ISO9660 file which means it can be mounted to a local directory.</p><p>You can create any directory anywhere you like and mount the iso file, in my case I have created a directory /home/nanik/Downloads/playwithiso/mountiso and used the following command to mount the file</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=color:#a6e22e>sudo</span> <span style=color:#a6e22e>mount</span> <span style=color:#f92672>-</span><span style=color:#a6e22e>o</span> <span style=color:#a6e22e>loop</span> .<span style=color:#f92672>/</span><span style=color:#a6e22e>minikube</span>.<span style=color:#a6e22e>iso</span> <span style=color:#f92672>/</span><span style=color:#a6e22e>home</span><span style=color:#f92672>/</span><span style=color:#a6e22e>nanik</span><span style=color:#f92672>/</span><span style=color:#a6e22e>Downloads</span><span style=color:#f92672>/</span><span style=color:#a6e22e>playwithiso</span><span style=color:#f92672>/</span><span style=color:#a6e22e>mountiso</span><span style=color:#f92672>/</span></code></pre></div><p>After the mount command successfully executed you will see the following tree structure</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>├── boot
+│   ├── bzImage
+│   └── initrd
+├── boot.catalog
+└── isolinux
+    ├── isolinux.bin
+    ├── isolinux.cfg
+    └── ldlinux.c32</code></pre></div><p>as can be see the iso file contain the rootfs (initrd) and kernel (bzImage) along with the the <a href="https://wiki.syslinux.org/wiki/index.php?title=Doc/isolinux">ISOLINUX bootloader</a> files</p><h1>Chroot</h1><p>To further having fun with the iso file let&rsquo;s use the rootfs to boot into it using <a href=https://en.wikipedia.org/wiki/Chroot>chroot</a>. Copy the initrd file from the mounted directory described on the previous section and use the following command to unzip it</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=color:#a6e22e>bunzip2</span> .<span style=color:#f92672>/</span><span style=color:#a6e22e>initrd</span></code></pre></div><p>the initrd will be unzipped to a file called initrd.out, use the following command to unpack the file</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=color:#a6e22e>cpio</span> <span style=color:#f92672>-</span><span style=color:#a6e22e>idv</span> &lt; <span style=color:#a6e22e>initrd</span>.<span style=color:#a6e22e>out</span> </code></pre></div><p>the file will be unpacked to the following tree structure</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>├── bin -&gt; usr/bin
+├── dev
+├── etc
+│   ├── cni
+│   ├── containerd
+│   ├── containers
+│   ├── crio
+│   ├── dbus-1
+│   ├── docker
+│   ├── glusterfs
+│   ├── init.d
+│   ├── iproute2
+│   ├── kernel
+│   ├── lvm
+│   ├── modules-load.d
+│   ├── pam.d
+│   ├── profile.d
+│   ├── ssh
+│   ├── ssl
+│   ├── sudoers.d
+│   ├── sysconfig
+│   ├── sysctl.d
+│   ├── systemd
+│   ├── tmpfiles.d
+│   ├── udev
+│   ├── vmware-tools
+│   ├── X11
+│   └── xdg
+├── home
+│   └── docker
+├── lib -&gt; usr/lib
+├── lib64 -&gt; lib
+├── media
+├── mnt
+├── opt
+│   └── cni
+├── proc
+├── root
+├── run
+│   ├── crio
+│   ├── dbus
+│   ├── gluster
+│   ├── nfs
+│   └── sudo
+├── sbin -&gt; usr/sbin
+├── srv
+├── sys
+├── tmp
+├── usr
+│   ├── bin
+│   ├── etc
+│   ├── lib
+│   ├── lib64 -&gt; lib
+│   ├── libexec
+│   ├── sbin
+│   └── share
+└── var
+    ├── empty
+    ├── lib
+    ├── log
+    └── run -&gt; ../run</code></pre></div><p>Make sure you are inside the extracted directory and use the following command to chroot into it</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=color:#a6e22e>sudo</span> <span style=color:#a6e22e>chroot</span> .</code></pre></div><p>you will get bash prompt as follows</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=color:#a6e22e>bash</span><span style=color:#f92672>-</span><span style=color:#ae81ff>4.4</span><span style=color:#960050;background-color:#1e0010>#</span> </code></pre></div><p>To come out from the bash just type exit.</p><h1>Using local build .iso file</h1><p>The following command specified minikube to use locally built iso file</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=color:#a6e22e>minikube</span> <span style=color:#a6e22e>start</span> <span style=color:#f92672>--</span><span style=color:#a6e22e>iso</span><span style=color:#f92672>-</span><span style=color:#a6e22e>url</span>=<span style=color:#a6e22e>file</span>:<span style=color:#f92672>///</span><span style=color:#a6e22e>home</span><span style=color:#f92672>/</span><span style=color:#a6e22e>nanik</span><span style=color:#f92672>/</span><span style=color:#a6e22e>Downloads</span><span style=color:#f92672>/</span><span style=color:#a6e22e>temp</span><span style=color:#f92672>/</span><span style=color:#a6e22e>packages</span><span style=color:#f92672>/</span><span style=color:#a6e22e>src</span><span style=color:#f92672>/</span><span style=color:#a6e22e>k8s</span>.<span style=color:#a6e22e>io</span><span style=color:#f92672>/</span><span style=color:#a6e22e>minikube</span><span style=color:#f92672>/</span><span style=color:#a6e22e>out</span><span style=color:#f92672>/</span><span style=color:#a6e22e>minikube</span>.<span style=color:#a6e22e>iso</span></code></pre></div><p>Below is the log output</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>😄  minikube v0.0.0-unset on Ubuntu xx.xx
+🔥  Creating virtualbox VM (CPUs=2, Memory=2000MB, Disk=20000MB) ...
+Downloading /home/nanik/.minikube/cache/boot2docker.iso from file:///home/nanik/Downloads/temp/packages/src/k8s.io/minikube/out/minikube.iso...
+Creating VirtualBox VM...
+Creating SSH key...
+Starting the VM...
+Check network to re-create if needed...
+Waiting for an IP...
+Setting Docker configuration on the remote daemon...
+Waiting for SSH to be available...
+Detecting the provisioner...
+🐳  Preparing Kubernetes v1.16.0-beta.1 on Docker 18.09.8 ...
+🚜  Pulling images ...
+🚀  Launching Kubernetes ... 
+⌛  Waiting for: apiserver proxy etcd scheduler controller dns
+🏄  Done! kubectl is now configured to use &#34;minikube&#34;
+💡  For best results, install kubectl: https://kubernetes.io/docs/tasks/tools/install-kubectl/</code></pre></div><p>NOTE: notice the message Downloading /home/nanik/.minikube/cache/boot2docker.iso the process behind this message is actually using the specified minikube.iso and copying it to boot2docker.iso</p><h1>Reference</h1><p><a href=https://minikube.sigs.k8s.io/docs/contributing/iso/>Contributing minikube iso</a></p></div><div class=about><p></p></div><nav id=pagination><a class=next href=../../post/howminikubeworks/>Next</a></nav><footer>Built with <a href=https://github.com/spf13/hugo>Hugo</a><p>Template By : © Alexander Feller 2018</p></footer></div></div></div></div></div></body><script type=text/javascript>var _paq=_paq||[];_paq.push(['trackPageView']);_paq.push(['enableLinkTracking']);(function(){var u=(("https:"==document.location.protocol)?"https":"http")+":change-me";_paq.push(['setTrackerUrl',u+'piwik.php']);_paq.push(['setSiteId',4]);var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];g.type='text/javascript';g.defer=true;g.async=true;g.src=u+'piwik.js';s.parentNode.insertBefore(g,s);})();</script><noscript><p><img src=http://change-me style=border:0 alt></p></noscript></html>
