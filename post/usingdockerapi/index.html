@@ -1,0 +1,39 @@
+<!doctype html><html lang=en><head><title>Playing with Docker SDK (Work in progress)</title><meta name=viewport content="width=device-width,initial-scale=1"><meta charset=utf-8><link href=../../css/milk.min.css rel=stylesheet><link href=../../css/milk-responsive.min.css rel=stylesheet><link href=../../css/style.css rel=stylesheet type=text/css media=all><link href=../../css/fonts.css rel=stylesheet type=text/css media=all><link rel="shortcut icon" href=../../images/alexfinn.ico><link rel=apple-touch-icon href><link rel=canonical href=../../post/usingdockerapi/><link href=../../rss.xml type=application/atom+xml rel=alternate></head><body><div class="navbar navbar-fixed-top"><div id=navbar-inner><div id=logo><a href=../../><img src=../../images/minikube.png width=100px></img></a></div></div></div><div class=container><div class=content><div class=row-fluid><div class=span12><div class=posts><div class=post><header class=post-header><h1><a href=../../post/usingdockerapi/>Playing with Docker SDK (Work in progress)</a></h1><div class=post-time>September 1, 2019</div><div class=post-time>Nanik Tolaram (nanikjava@gmail.com)</div></header><div class=post-after><div class=tags></div></div><hr><div class="post content"><p>This article will walk through on how to use the docker SDK using Go. Docker provide a very rich SDK allowing developers to communicate with the docker daemon.</p><h1>Intercepting Docker</h1><p>Run the following to intercept</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>socat -v UNIX-LISTEN:/tmp/fake,fork UNIX-CONNECT:/var/run/docker.sock</code></pre></div><p>Run the following to make sure docker CLI send command to our proxy in /tmp/fake</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>export DOCKER_HOST=unix:///tmp/fake
+docker image list</code></pre></div><p>The output will show as follows</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>&gt; 2019/09/12 20:38:27.924464  length=81 from=0 to=80
+HEAD /_ping HTTP/1.1\r
+Host: docker\r
+User-Agent: Docker-Client/xx.xx.1 (linux)\r
+\r
+&lt; 2019/09/12 20:38:27.924817  length=287 from=0 to=286
+HTTP/1.1 200 OK\r
+Api-Version: 1.41\r
+Cache-Control: no-cache, no-store, must-revalidate\r
+Content-Length: 0\r
+Content-Type: text/plain; charset=utf-8\r
+Docker-Experimental: false\r
+Ostype: linux\r
+Pragma: no-cache\r
+Server: Docker/library-import (linux)\r
+Date: Thu, 12 Sep 2019 10:38:27 GMT\r
+\r
+&gt; 2019/09/12 20:38:27.925517  length=92 from=81 to=172
+GET /v1.40/images/json HTTP/1.1\r
+Host: docker\r
+User-Agent: Docker-Client/xx.xx.1 (linux)\r
+\r
+&lt; 2019/09/12 20:38:27.926859  length=889 from=287 to=1175
+HTTP/1.1 200 OK\r
+Api-Version: 1.41\r
+Content-Type: application/json\r
+Docker-Experimental: false\r
+Ostype: linux\r
+Server: Docker/library-import (linux)\r
+Date: Thu, 12 Sep 2019 10:38:27 GMT\r
+Content-Length: 679\r
+\r
+[{&#34;Containers&#34;:-1,&#34;Created&#34;:1568087900,&#34;Id&#34;:........
+
+.....
+.....
+.....</code></pre></div></div><div class=about><p></p></div><nav id=pagination><a class=prev href=../../post/minikubeparameters/>Prev</a>
+<a class=next href=../../post/walkingthroughminikubesourcecode/>Next</a></nav><footer>Built with <a href=https://github.com/spf13/hugo>Hugo</a><p>Template By : © Alexander Feller 2018</p></footer></div></div></div></div></div></body><script type=text/javascript>var _paq=_paq||[];_paq.push(['trackPageView']);_paq.push(['enableLinkTracking']);(function(){var u=(("https:"==document.location.protocol)?"https":"http")+":change-me";_paq.push(['setTrackerUrl',u+'piwik.php']);_paq.push(['setSiteId',4]);var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];g.type='text/javascript';g.defer=true;g.async=true;g.src=u+'piwik.js';s.parentNode.insertBefore(g,s);})();</script><noscript><p><img src=http://change-me style=border:0 alt></p></noscript></html>
